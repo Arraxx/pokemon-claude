@@ -2,7 +2,7 @@
 
 **Give your AI agents a little presence on the desktop.**
 
-Pokémon Claude is a tiny, transparent **always-on-top dock** for developers who use coding agents. It shows a row of **Gen‑1 style pixel companions** that react to what your tools are doing—think of it as a mood strip for your automation.
+Pokémon Claude is a tiny, transparent **always-on-top dock** for developers who use coding agents. It shows a row of **First gen style pixel pokemon** that react to what your claude agents are doing—think of it as a mood strip for your automation.
 
 Works on **macOS, Windows, and Linux** (built with [Electron](https://www.electronjs.org/)).
 
@@ -12,7 +12,7 @@ Works on **macOS, Windows, and Linux** (built with [Electron](https://www.electr
 
 ## Why use it
 
-- **At-a-glance status** — See when agents are busy, finished, or waiting on you, without tab-hunting.
+- **At-a-glance status** — See when claude agents are busy, finished, or waiting on you, without tab-hunting.
 - **Stays out of the way** — Sits in a thin strip along the bottom of the screen. Mouse events pass through to windows below by default (so you can still click the terminal behind it).
 - **Claude Code aware (optional)** — Watches `~/.claude/sessions` and syncs live Claude Code sessions on the same machine. Turn it off with an env var if you only want the HTTP API.
 - **Hackable** — A small local **HTTP + Server-Sent Events** API on `127.0.0.1` so other tools or scripts can drive the HUD.
