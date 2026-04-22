@@ -8,6 +8,19 @@ const PROJECTS_ROOT = path.join(os.homedir(), '.claude', 'projects');
 const PERMISSION_TEXT_RE =
   /can i proceed|proceed with these|would you like me to (apply|proceed)|should i (apply|run|continue)|do you want me to (apply|proceed)|needs your (approval|confirmation)|awaiting your (approval|response)|please confirm|permission to (run|execute)|before i (can )?(continue|make changes)|shall i (go ahead|proceed)|may i (proceed|apply)|are you okay with|want me to (apply|run these)/i;
 
+/**
+ * Decide whether a single string of assistant text looks like Claude is
+ * waiting on the user. The literal "?" check is the highest-priority signal
+ * — any question mark in Claude's final reply means the user is being asked
+ * something, so we should show the heart, never the smile.
+ */
+function textLooksLikeQuestion(text) {
+  if (typeof text !== 'string' || !text) return false;
+  if (text.includes('?')) return true;
+  if (PERMISSION_TEXT_RE.test(text)) return true;
+  return false;
+}
+
 function cwdToProjectSlug(cwd) {
   if (!cwd || typeof cwd !== 'string') return '';
   const norm = path.normalize(cwd);
@@ -41,11 +54,15 @@ function readFileTailUtf8(filePath, maxBytes) {
 }
 
 /**
- * True when the most recent transcript entry is an assistant message whose text
- * blocks contain "?". If the latest entry is from the user, the user just
- * replied — do not treat an older assistant question as still open.
+ * Inspect the most recent transcript entry. If it is an assistant message,
+ * decide whether it is still asking the user to do something (matches the
+ * permission regex OR contains a "?"). If the latest entry is from the user,
+ * the user has already replied — any older assistant question is now closed.
+ *
+ * This is what prevents stale matches in the file tail from pinning the heart
+ * bubble on forever.
  */
-function transcriptEndsWithAssistantQuestion(lines) {
+function latestAssistantNeedsAnswer(lines) {
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const line = lines[i];
     if (!line || !line.trim()) continue;
@@ -64,7 +81,8 @@ function transcriptEndsWithAssistantQuestion(lines) {
       .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
       .map((b) => b.text)
       .join('\n');
-    return texts.includes('?');
+    if (!texts) return false;
+    return textLooksLikeQuestion(texts);
   }
   return false;
 }
@@ -109,30 +127,41 @@ function hasPendingToolUse(lines) {
 }
 
 /**
- * Returns true if transcript suggests the user should respond (permission / question).
- * Detects:
- *  1. Any assistant text matching permission-asking phrases
- *  2. Any pending tool_use (Bash, Read, Write, AskUserQuestion, etc.) with no tool_result yet
- *  3. The latest transcript line is assistant text that contains "?"
+ * Returns true if the transcript suggests the user should respond.
+ *
+ * A "needs response" state requires a CURRENTLY OPEN prompt — i.e. one that
+ * the user has not already answered. We therefore evaluate signals against
+ * the tail of the transcript only:
+ *  1. Any pending tool_use (Bash, Read, Write, AskUserQuestion, …) with no
+ *     matching tool_result yet — Claude Code writes the tool_use first and
+ *     waits for approval before the tool_result arrives.
+ *  2. The most recent assistant message contains a permission-asking phrase
+ *     OR a literal "?" (and no user reply has come in after it).
+ *
+ * Importantly, we do NOT scan the full file body for permission phrases:
+ * old prompts like "Can I proceed?" stay in the JSONL forever, so a global
+ * regex match would pin the heart bubble on permanently.
  */
 function inferNeedsPermissionFromTranscript(cwd, sessionId) {
   if (!cwd || !sessionId) return false;
   const slug = cwdToProjectSlug(cwd);
   if (!slug) return false;
   const jsonl = path.join(PROJECTS_ROOT, slug, `${sessionId}.jsonl`);
-  if (!fs.existsSync(jsonl)) {
-    return false;
-  }
+  return inferNeedsPermissionFromTranscriptPath(jsonl);
+}
 
+/**
+ * Same as `inferNeedsPermissionFromTranscript` but takes a direct path to the
+ * JSONL. Used by the Stop hook handler, which receives `transcript_path`
+ * directly in its payload.
+ */
+function inferNeedsPermissionFromTranscriptPath(jsonl) {
+  if (!jsonl || !fs.existsSync(jsonl)) return false;
   const tail = readFileTailUtf8(jsonl, 768 * 1024);
-  if (PERMISSION_TEXT_RE.test(tail)) {
-    return true;
-  }
-
   const lines = tail.split('\n').filter(Boolean);
   const slice = lines.length > 6000 ? lines.slice(-6000) : lines;
   if (hasPendingToolUse(slice)) return true;
-  return transcriptEndsWithAssistantQuestion(slice);
+  return latestAssistantNeedsAnswer(slice);
 }
 
 /**
@@ -170,16 +199,21 @@ function getLastFinalAssistantFingerprint(cwd, sessionId) {
       obj.message && Array.isArray(obj.message.content) ? obj.message.content : null;
     if (!content) continue;
 
-    // Mid-task if any tool_use or thinking block is present.
-    const hasMidTaskBlock = content.some(
-      (b) => b && (b.type === 'tool_use' || b.type === 'thinking'),
-    );
-    if (hasMidTaskBlock) return null;
+    // Mid-task if any tool_use block is present. Thinking blocks alone are
+    // fine — Claude often emits a short reasoning trace right before the
+    // final answer and we still want to flash on that.
+    const hasToolUse = content.some((b) => b && b.type === 'tool_use');
+    if (hasToolUse) return null;
 
-    const textBlock = content.find((b) => b && b.type === 'text');
-    if (!textBlock || !textBlock.text) return null;
+    const text = content
+      .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
+      .map((b) => b.text)
+      .join('\n');
+    if (!text) return null;
 
-    return String(textBlock.text).slice(0, 120);
+    // Combine length + head + tail so that two short, similar answers
+    // ("Done!" vs "Done.") don't collide and silently swallow a flash.
+    return `${text.length}|${text.slice(0, 120)}|${text.slice(-40)}`;
   }
 
   return null;
@@ -187,5 +221,7 @@ function getLastFinalAssistantFingerprint(cwd, sessionId) {
 
 module.exports = {
   inferNeedsPermissionFromTranscript,
+  inferNeedsPermissionFromTranscriptPath,
   getLastFinalAssistantFingerprint,
+  textLooksLikeQuestion,
 };

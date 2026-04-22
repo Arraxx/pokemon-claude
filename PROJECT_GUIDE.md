@@ -35,24 +35,26 @@ Pokémon Claude doesn't just show Pokémon; it makes them reactive to your Claud
 The app looks into `~/.claude/sessions/`. Every JSON file there represents a Claude session. The app checks if the `pid` inside is still alive on your Mac.
 
 ### 2. Detection of "Input Required" (The Heart Bubble 🫀)
-When Claude Code waits for you to approve a command (like `Bash` or `Write`), it writes the tool call to its transcript but hasn't received a result yet. 
-- `claudeTranscript.js` scans the transcript for any `tool_use` that doesn't have a matching `tool_result`.
-- It also looks for common permission-asking phrases in the text.
-- If detected, status becomes `needs_permission`, and the Pokémon shows a heart.
+The app uses two complementary signals so the heart appears the instant Claude is blocked, and disappears the instant you've answered:
+
+- **Primary — Claude Code hooks** (`src/claudeHooks.js` + `src/hookState.js`). On startup the app installs a tiny bridge script (`~/.claude/pokemon-claude-hook.sh`) and registers entries under `~/.claude/settings.json` for `PermissionRequest`, `Notification`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`, `UserPromptSubmit`, and `Stop`. Each fired event is POSTed to `/api/claude-hook` and updates an in-memory truth table per session. This catches interactive prompts like *"Do you want to allow Claude to fetch this content?"* — those don't appear in the JSONL until after you answer, so transcript scanning alone can't see them.
+- **Fallback — transcript inference** (`src/claudeTranscript.js`). For sessions that have never sent a hook (older Claude Code, hooks disabled, etc.), the app scans the JSONL for an unmatched `tool_use` block, or for a permission phrase / question mark in the **most recent** assistant turn. The "most recent" qualifier is key — older prompts that the user already answered remain in the file forever, so a global match would pin the heart on permanently.
+
+The install is idempotent and tagged with a marker so it never duplicates or clobbers your own hooks. Your original `settings.json` is backed up to `settings.json.pokemon-claude.bak` on first modification. Set `POKEMON_CLAUDE_INSTALL_HOOKS=0` to opt out.
 
 ### 3. Detection of "Task Complete" (The Happy Bubble 😊)
-Claude Code identifies tasks through "turns".
-- `claudeTranscript.js` generates a **fingerprint** of the very last assistant message that was a "final answer" (text only, no tool use).
-- When this fingerprint changes, the system knows a new task has finished.
-- The Pokémon flashes the `completed` status for 10 seconds, showing the happy bubble.
+- **Primary — `Stop` hook.** When Claude Code finishes a turn, the bridge fires a `Stop` event, the session is flagged `completed` for 10 s, and the smile bubble shows.
+- **Fallback — fingerprint diff.** For hookless sessions, `claudeTranscript.js` fingerprints the last "final" assistant message (text only, no tool use). When the fingerprint changes, a new task has just finished.
 
 ---
 
 ## 🛠️ Key Files to Explore
 
-- **`src/main.js`**: Entry point and server logic.
-- **`renderer/pet-engine.js`**: The core animation logic.
-- **`src/claudeTranscript.js`**: The transcript parsing logic.
+- **`src/main.js`**: Entry point, HTTP server, and the `/api/claude-hook` endpoint.
+- **`renderer/pet-engine.js`**: The core animation + bubble logic.
+- **`src/claudeTranscript.js`**: Transcript parsing fallback.
+- **`src/claudeHooks.js`**: Idempotent installer for the Claude Code hook bridge.
+- **`src/hookState.js`**: Per-session truth table driven by hook events.
 
 ---
 

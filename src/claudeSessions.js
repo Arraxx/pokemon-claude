@@ -6,6 +6,7 @@ const {
   inferNeedsPermissionFromTranscript,
   getLastFinalAssistantFingerprint,
 } = require('./claudeTranscript');
+const hookState = require('./hookState');
 
 const SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
 
@@ -69,54 +70,70 @@ function scanSessions() {
     const label = name || (cwd ? path.basename(cwd) : sessionId.slice(0, 8));
 
     // ── Permission detection ─────────────────────────────────────────────
+    // Hook events from Claude Code are the most accurate source. When we've
+    // received any hook for this session we trust them; only sessions that
+    // have never sent a hook fall back to the transcript heuristic.
     let status = 'running';
+    const hs = hookState.getState(sessionId);
+    const useHooks = hookState.hasAnyHookSignal(sessionId);
+
     let transcriptNeed = false;
-    try {
-      transcriptNeed = inferNeedsPermissionFromTranscript(cwd, sessionId);
-      if (transcriptNeed) {
-        status = 'needs_permission';
-      }
-    } catch {
-      /* keep running */
-    }
-
-    const wasNeeding = permissionHintPrev.get(sessionId);
-    let fence = permissionFence.get(sessionId) || 0;
-    if (transcriptNeed && wasNeeding !== true) {
-      fence += 1;
-      permissionFence.set(sessionId, fence);
-    }
-    permissionHintPrev.set(sessionId, transcriptNeed);
-
-    // ── Per-task completion detection ────────────────────────────────────
-    const now = Date.now();
-    if (status === 'running') {
-      let fp = null;
+    if (!useHooks) {
       try {
-        fp = getLastFinalAssistantFingerprint(cwd, sessionId);
+        transcriptNeed = inferNeedsPermissionFromTranscript(cwd, sessionId);
       } catch {
         /* ignore */
       }
+    }
 
-      if (fp !== null) {
-        const prev = lastFinalFP.get(sessionId);
-        if (prev === undefined) {
-          // First time we see this session — record the fingerprint but don't flash
-          // (the task may have completed before we started watching).
-          lastFinalFP.set(sessionId, fp);
-        } else if (fp !== prev) {
-          // Fingerprint changed → Claude just finished a new task!
-          lastFinalFP.set(sessionId, fp);
-          taskFlash.set(sessionId, { expiresAt: now + TASK_FLASH_MS });
-        }
+    const needsPermission = useHooks ? hs.needsPermission : transcriptNeed;
+    if (needsPermission) status = 'needs_permission';
+
+    let fence;
+    if (useHooks) {
+      fence = hs.fence;
+      permissionFence.set(sessionId, fence);
+      permissionHintPrev.set(sessionId, needsPermission);
+    } else {
+      const wasNeeding = permissionHintPrev.get(sessionId);
+      fence = permissionFence.get(sessionId) || 0;
+      if (transcriptNeed && wasNeeding !== true) {
+        fence += 1;
+        permissionFence.set(sessionId, fence);
       }
+      permissionHintPrev.set(sessionId, transcriptNeed);
+    }
 
-      // Apply flash if active.
-      const flash = taskFlash.get(sessionId);
-      if (flash && now < flash.expiresAt) {
-        status = 'completed';
-      } else if (flash && now >= flash.expiresAt) {
-        taskFlash.delete(sessionId);
+    // ── Per-task completion detection ────────────────────────────────────
+    // Hook-driven `Stop` events are authoritative when present; transcript
+    // fingerprint comparison still runs as a fallback for sessions without
+    // hooks installed (e.g. older Claude Code versions).
+    const now = Date.now();
+    if (status === 'running') {
+      if (useHooks) {
+        if (hs.completed) status = 'completed';
+      } else {
+        let fp = null;
+        try {
+          fp = getLastFinalAssistantFingerprint(cwd, sessionId);
+        } catch {
+          /* ignore */
+        }
+        if (fp !== null) {
+          const prev = lastFinalFP.get(sessionId);
+          if (prev === undefined) {
+            lastFinalFP.set(sessionId, fp);
+          } else if (fp !== prev) {
+            lastFinalFP.set(sessionId, fp);
+            taskFlash.set(sessionId, { expiresAt: now + TASK_FLASH_MS });
+          }
+        }
+        const flash = taskFlash.get(sessionId);
+        if (flash && now < flash.expiresAt) {
+          status = 'completed';
+        } else if (flash && now >= flash.expiresAt) {
+          taskFlash.delete(sessionId);
+        }
       }
     }
 
@@ -147,11 +164,15 @@ function scanSessions() {
       permissionFence.delete(sid);
       lastFinalFP.delete(sid);
       taskFlash.delete(sid);
+      hookState.forgetSession(sid);
     }
   }
 
   return rows;
 }
+
+/** @type {(() => void) | null} */
+let activeTick = null;
 
 function startClaudePolling({ intervalMs }) {
   const tick = () => {
@@ -162,8 +183,14 @@ function startClaudePolling({ intervalMs }) {
       console.warn('[pokemon-claude] Claude session sync:', e.message);
     }
   };
+  activeTick = tick;
   tick();
   return setInterval(tick, intervalMs);
 }
 
-module.exports = { startClaudePolling };
+/** Run an extra scan immediately — used to react to hook events without waiting for the next poll. */
+function forceTick() {
+  if (activeTick) activeTick();
+}
+
+module.exports = { startClaudePolling, forceTick };

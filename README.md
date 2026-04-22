@@ -92,10 +92,13 @@ npm run pack
 | `POKEMON_CLAUDE_PORT` | HTTP server port (default `3847`) |
 | `POKEMON_CLAUDE_SYNC` | Set to `0` to disable Claude session polling |
 | `POKEMON_CLAUDE_POLL_MS` | Poll interval in ms (default `2500`) |
+| `POKEMON_CLAUDE_INSTALL_HOOKS` | Set to `0` to skip auto-installing the Claude Code hook bridge in `~/.claude/settings.json` (default: install) |
 | `POKEMON_CLAUDE_DOCK_HEIGHT` | Height of the dock in pixels (default `136`) |
 | `POKEMON_CLAUDE_DOCK_LIFT` | Extra height when the window is focused (default `36`) |
 | `POKEMON_CLAUDE_MOUSE_PASSTHROUGH` | `0` to allow dragging the window (default: passthrough on) |
 | `POKEMON_CLAUDE_MAC_LEVEL` | macOS only: `alwaysOnTop` level (e.g. `status`) |
+
+> **About the hook bridge.** On startup the app installs a small script at `~/.claude/pokemon-claude-hook.sh` and adds tagged entries (`"pokemon-claude-bridge": true`) under `hooks` in `~/.claude/settings.json`. Existing hooks are preserved, the original file is backed up to `settings.json.pokemon-claude.bak`, and re-running the app never duplicates the entries. This is what lets the heart bubble appear instantly on prompts like *"Do you want to allow Claude to fetch this content?"* — those prompts only land in the JSONL transcript after you answer, so polling alone can't see them.
 
 The same values were previously read from `POKEMON_INTACT_*` names; those still work as fallbacks if a `POKEMON_CLAUDE_*` variable is not set.
 
@@ -108,6 +111,7 @@ The same values were previously read from `POKEMON_INTACT_*` names; those still 
 - `GET /api/stream` — **SSE** stream of state updates  
 - `POST /api/event` — Push agent events (JSON body)  
 - `POST /api/agents/remove` — Remove an agent by `id`  
+- `POST /api/claude-hook` — Receives Claude Code hook payloads from the bridge script (used internally; you generally don't call this yourself)  
 
 The server binds to **127.0.0.1** only.
 

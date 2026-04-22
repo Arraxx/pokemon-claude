@@ -5,7 +5,9 @@ const path = require('path');
 const { URL } = require('url');
 
 const { sseClients, getState, upsertFromEvent, removeById } = require('./agentStore');
-const { startClaudePolling } = require('./claudeSessions');
+const { startClaudePolling, forceTick: forceClaudeTick } = require('./claudeSessions');
+const hookState = require('./hookState');
+const { installHooks } = require('./claudeHooks');
 
 /** Project root (parent of src/). */
 const ROOT = path.join(__dirname, '..');
@@ -30,6 +32,8 @@ const DOCK_LIFT = Number(env('POKEMON_CLAUDE_DOCK_LIFT', 'POKEMON_INTACT_DOCK_LI
 const MOUSE_PASSTHROUGH = env('POKEMON_CLAUDE_MOUSE_PASSTHROUGH', 'POKEMON_INTACT_MOUSE_PASSTHROUGH') !== '0';
 /** Claude `~/.claude/sessions` sync (set to `0` to disable). */
 const CLAUDE_SESSION_SYNC = env('POKEMON_CLAUDE_SYNC', 'POKEMON_INTACT_CLAUDE') !== '0';
+/** Auto-install Claude Code hook bridge into `~/.claude/settings.json` (set to `0` to disable). */
+const INSTALL_HOOKS = env('POKEMON_CLAUDE_INSTALL_HOOKS') !== '0';
 
 function json(res, status, obj) {
   const body = JSON.stringify(obj);
@@ -143,6 +147,36 @@ function createServer() {
         return;
       }
       json(res, 200, result);
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/claude-hook') {
+      let buf;
+      try {
+        buf = await readBody(req, 256 * 1024);
+      } catch {
+        json(res, 413, { error: 'payload too large' });
+        return;
+      }
+      let body;
+      try {
+        body = JSON.parse(buf.toString('utf8') || '{}');
+      } catch {
+        json(res, 400, { error: 'invalid JSON' });
+        return;
+      }
+      const eventName = typeof body.hook_event_name === 'string' ? body.hook_event_name : '';
+      const handled = hookState.applyHookEvent(eventName, body);
+      // Force a fresh broadcast so the renderer reacts immediately rather than
+      // waiting for the next 2.5s poll tick.
+      if (handled) {
+        try {
+          forceClaudeTick();
+        } catch {
+          /* ignore */
+        }
+      }
+      json(res, 200, { ok: true, handled });
       return;
     }
 
@@ -303,6 +337,19 @@ app.whenReady().then(async () => {
   }
 
   if (CLAUDE_SESSION_SYNC) {
+    if (INSTALL_HOOKS) {
+      try {
+        const r = installHooks({ port: DEFAULT_PORT });
+        if (r.installed && r.changed) {
+          console.log(
+            `[pokemon-claude] Installed Claude Code hooks at ${r.settingsPath} (script: ${r.scriptPath})`,
+          );
+        }
+      } catch (e) {
+        console.warn('[pokemon-claude] Failed to install Claude hooks:', e.message);
+      }
+    }
+
     claudeTimer = startClaudePolling({
       intervalMs: Number(
         env('POKEMON_CLAUDE_POLL_MS', 'POKEMON_INTACT_CLAUDE_POLL_MS') || 2500,
