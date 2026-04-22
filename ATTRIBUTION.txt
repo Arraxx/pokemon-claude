@@ -1,0 +1,9 @@
+Sprites and media are taken from the open-source VS Code extension project:
+  https://github.com/jakobhoeg/vscode-pokemon
+
+That project credits The Pokémon Company / Nintendo / Game Freak for original
+sprite artwork and states fan, non-commercial use. If you redistribute the GIFs,
+keep their license and credits and comply with applicable IP rules in your jurisdiction.
+
+This repository only vendors the public media/ folder via scripts/vendor-pokemon-media.sh
+for local UI experiments. It is not affiliated with Nintendo or The Pokémon Company.

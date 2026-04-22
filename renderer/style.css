@@ -1,0 +1,221 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body.dock {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: transparent !important;
+  color: #e2e8f0;
+}
+
+body.dock {
+  -webkit-app-region: drag;
+}
+
+.lane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 96px;
+  overflow: visible;
+}
+
+.lane>* {
+  -webkit-app-region: no-drag;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.95);
+  -webkit-app-region: drag;
+  text-shadow:
+    0 0 8px rgba(15, 23, 42, 0.95),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.unit {
+  position: static;
+  pointer-events: none;
+}
+
+/* Pokeball and Spawn/Despawn Animations */
+@keyframes pokeball-open {
+  to {
+    background-position-y: calc(-1 * var(--frame-size) * var(--frames));
+  }
+}
+
+@keyframes pokeball-close {
+  from {
+    background-position-y: calc(-1 * var(--frame-size) * var(--frames));
+  }
+
+  to {
+    background-position-y: 0;
+  }
+}
+
+@keyframes pokemon-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+    filter: saturate(0) brightness(3) contrast(1);
+  }
+
+  40% {
+    filter: saturate(0.3) brightness(1.8) contrast(1.05);
+  }
+
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: saturate(0.8) brightness(1.1) contrast(1);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@keyframes pokemon-fade-out {
+  0% {
+    opacity: 1;
+    filter: none;
+  }
+
+  40% {
+    transform: scale(1.15);
+    filter: saturate(0.8) brightness(1.1) contrast(1);
+  }
+
+  60% {
+    opacity: 0.4;
+    filter: saturate(0.3) brightness(1.8) contrast(1.05);
+  }
+
+  100% {
+    transform: scale(0.4);
+    opacity: 0;
+    filter: saturate(0) brightness(3) contrast(1);
+  }
+}
+
+.pokeball-sprite {
+  --frame-size: 64px;
+  --frames: 6;
+  position: absolute;
+  width: var(--frame-size);
+  height: var(--frame-size);
+  background-image: url('/assets/pokeball_sprite_sheet.png');
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: var(--frame-size) calc(var(--frame-size) * var(--frames));
+  image-rendering: pixelated;
+  z-index: 10;
+  pointer-events: none;
+  display: none;
+  bottom: 0;
+}
+
+.pokeball-sprite.active {
+  display: block;
+}
+
+.pokeball-sprite.open {
+  animation: pokeball-open 0.4s steps(var(--frames)) forwards;
+}
+
+.pokeball-sprite.close {
+  animation: pokeball-close 0.4s steps(var(--frames)) forwards;
+}
+
+.sprite-wrap.spawn-pop {
+  animation: pokemon-pop 200ms ease-out forwards;
+}
+
+.sprite-wrap.fade-out {
+  animation: pokemon-fade-out 250ms ease-out forwards;
+}
+
+.unit-inner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 88px;
+  height: 128px;
+  pointer-events: none;
+}
+
+.bubble-wrap {
+  position: relative;
+  width: 36px;
+  max-width: 36px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.bubble-wrap[hidden] {
+  display: none !important;
+}
+
+.bubble-img {
+  display: block;
+  width: 36px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.sprite-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sprite {
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  object-fit: contain;
+}
+
+/* Shine only while the tooltip bubble is visible */
+.unit.unit--bubble-visible.status-needs_permission .sprite {
+  filter: drop-shadow(0 0 4px rgba(249, 115, 22, 0.55));
+}
+
+.unit.unit--bubble-visible.status-completed .sprite {
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.45));
+}
+
+.unit.unit--bubble-visible.status-failed .sprite {
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.45));
+}

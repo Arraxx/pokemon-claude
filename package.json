@@ -1,0 +1,65 @@
+{
+  "name": "pokemon-claude",
+  "version": "0.1.0",
+  "description": "Pokémon Claude — a pixel-art dock HUD for AI coding agents, with optional Claude Code sync and a local HTTP API.",
+  "main": "src/main.js",
+  "author": "Pokémon Claude contributors",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "vendor-sprites": "bash scripts/vendor-pokemon-media.sh",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "dev.pokemonclaude.app",
+    "productName": "Pokémon Claude",
+    "files": [
+      "package.json",
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development"
+    }
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
