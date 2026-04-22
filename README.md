@@ -1,5 +1,8 @@
 # Pokémon Claude
 
+<img width="3024" height="356" alt="Adobe Express - pokemon" src="https://github.com/user-attachments/assets/032136b2-2a5b-4d9d-b50a-0ec3e8d17fa6" />
+
+
 **Give your AI agents a little presence on the desktop.**
 
 Pokémon Claude is a tiny, transparent **always-on-top dock** for developers who use coding agents. It shows a row of **First gen style pixel pokemon** that react to what your claude agents are doing—think of it as a mood strip for your automation.
