@@ -8,6 +8,8 @@
   "scripts": {
     "start": "electron .",
     "vendor-sprites": "bash scripts/vendor-pokemon-media.sh",
+    "vendor-sprites:showdown": "bash scripts/vendor-pokemon-showdown.sh",
+    "vendor-sprites:showdown:all": "bash scripts/vendor-pokemon-showdown.sh --all",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",

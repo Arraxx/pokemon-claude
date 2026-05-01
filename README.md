@@ -48,6 +48,10 @@ git clone https://github.com/YOUR_USERNAME/pokemon-claude.git
 cd pokemon-claude
 npm install
 npm run vendor-sprites
+# Optional: HD animated sprites from Pokémon Showdown (10 iconic species by default).
+# npm run vendor-sprites:showdown          # 10 sample species
+# npm run vendor-sprites:showdown:all      # full gen1 (~153 species)
+# POKEMON_CLAUDE_SPRITE_STYLE=showdown npm start
 npm start
 ```
 
@@ -97,6 +101,7 @@ npm run pack
 | `POKEMON_CLAUDE_DOCK_LIFT` | Extra height when the window is focused (default `36`) |
 | `POKEMON_CLAUDE_MOUSE_PASSTHROUGH` | `0` to allow dragging the window (default: passthrough on) |
 | `POKEMON_CLAUDE_MAC_LEVEL` | macOS only: `alwaysOnTop` level (e.g. `status`) |
+| `POKEMON_CLAUDE_SPRITE_STYLE` | Art style — `vscode` (default, gen1 8fps pixel, walks the lane) or `showdown` (Pokémon Showdown HD animated, drifts only ~20px from spawn with a faint walk-bob). Run `npm run vendor-sprites:showdown` once first (or `:showdown:all` for the full set). The species pool is restricted to whichever pokémon you've vendored. |
 
 > **About the hook bridge.** On startup the app installs a small script at `~/.claude/pokemon-claude-hook.sh` and adds tagged entries (`"pokemon-claude-bridge": true`) under `hooks` in `~/.claude/settings.json`. Existing hooks are preserved, the original file is backed up to `settings.json.pokemon-claude.bak`, and re-running the app never duplicates the entries. This is what lets the heart bubble appear instantly on prompts like *"Do you want to allow Claude to fetch this content?"* — those prompts only land in the JSONL transcript after you answer, so polling alone can't see them.
 
@@ -126,7 +131,7 @@ Issues and PRs are welcome. Please keep changes focused; match existing style. F
 ## Legal
 
 - **Pokémon** and related names are **trademarks** of their respective owners. This project is an **independent, fan-made developer utility**; it is not affiliated with or endorsed by Nintendo, The Pokémon Company, or Game Freak.
-- In-game style **sprites and media** are not shipped in this repository. They are installed locally by `npm run vendor-sprites` from the [vscode-pokemon](https://github.com/jakobhoeg/vscode-pokemon) project—see that repo’s **license and attribution** after you vendor files.
+- In-game style **sprites and media** are not shipped in this repository. They are installed locally by `npm run vendor-sprites` from the [vscode-pokemon](https://github.com/jakobhoeg/vscode-pokemon) project—see that repo’s **license and attribution** after you vendor files. The optional `npm run vendor-sprites:showdown` script downloads animated XY-style sprites from [Pokémon Showdown](https://play.pokemonshowdown.com/), which are fan-maintained pixel art credited at <https://github.com/smogon/sprites>.
 
 This project’s **source code** is released under the **MIT License** (see [LICENSE](LICENSE)).
 

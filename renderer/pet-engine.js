@@ -22,11 +22,24 @@
     return Math.abs(h);
   }
 
+  let spriteStyle = 'vscode';
+
+  /** Showdown pets walk at ~55% the vscode pace and only drift this far from their spawn,
+   *  so they keep a "stationed" feel — a stroll, not a sweep across the lane. */
+  const SHOWDOWN_MAX_DRIFT_PX = 20;
+  function styleSpeedMult() {
+    return spriteStyle === 'showdown' ? 0.55 : 1;
+  }
+
   function spritePath(agent, useWalk) {
     const gen = agent.gen || 1;
     const species = agent.species || 'pikachu';
     const base = `gen${gen}/${species}`;
     const shiny = Boolean(agent.shiny);
+    if (spriteStyle === 'showdown') {
+      // Showdown sprites are single continuously-animated gifs; no walk/idle distinction.
+      return shiny ? `${base}/showdown_shiny.gif` : `${base}/showdown_default.gif`;
+    }
     if (shiny) {
       return useWalk ? `${base}/shiny_walk_8fps.gif` : `${base}/shiny_idle_8fps.gif`;
     }
@@ -68,6 +81,27 @@
     return false;
   }
 
+  /** Find a spawn `left` near the hash-preferred spot that doesn't overlap any occupied slot.
+   *  Pets need at least `width + MIN_GAP` between left-edges to avoid visual overlap.
+   *  Falls back to the hash-preferred position if the lane is too crowded to fit a free slot. */
+  function pickSpawnLeft(hashH, pad, rightMax, width, occupied) {
+    const MIN_GAP = 8;
+    const minDist = width + MIN_GAP;
+    const spread = Math.max(0, rightMax - pad);
+    const preferred = pad + (spread > 0 ? hashH % (spread + 1) : 0);
+    const clamp = (x) => Math.max(pad, Math.min(rightMax, x));
+    const overlaps = (x) => occupied.some((o) => Math.abs(o - x) < minDist);
+    if (!overlaps(preferred)) return preferred;
+    const STEP = Math.max(8, Math.floor(minDist / 4));
+    for (let offset = STEP; offset <= spread; offset += STEP) {
+      const right = clamp(preferred + offset);
+      if (right !== preferred && !overlaps(right)) return right;
+      const left = clamp(preferred - offset);
+      if (left !== preferred && !overlaps(left)) return left;
+    }
+    return preferred;
+  }
+
   function chooseNextState(from) {
     const table = {
       [States.sitIdle]: [States.walkLeft, States.walkRight],
@@ -80,7 +114,7 @@
   }
 
   class Pet {
-    constructor(id, agent, laneEl) {
+    constructor(id, agent, laneEl, occupiedLefts) {
       this.id = id;
       this.agent = agent;
       this.laneEl = laneEl;
@@ -90,8 +124,8 @@
       const laneW = Math.max(laneEl.clientWidth || 400, 200);
       const rightMax = Math.max(0, Math.floor(laneW * 0.95) - this.width);
       const pad = 8;
-      const spread = Math.max(0, rightMax - pad);
-      this.left = pad + (spread > 0 ? h % (spread + 1) : 0);
+      this.left = pickSpawnLeft(h, pad, rightMax, this.width, occupiedLefts || []);
+      this.home = this.left;
       const baseSpeed = 2 + (h % 25) / 10;
       this.speed = baseSpeed * (0.85 + ((h >> 4) % 30) / 100);
 
@@ -115,7 +149,9 @@
           <img class="bubble-img" alt="" width="${BUBBLE_PX}" height="28" />
         </div>
         <div class="sprite-wrap">
-          <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
+          <div class="sprite-bob">
+            <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
+          </div>
         </div>
       `;
       this.el.appendChild(this.inner);
@@ -212,6 +248,7 @@
       } else {
         this.spriteEl.style.transform = this.lastFacingLeft ? 'scaleX(-1)' : 'scaleX(1)';
       }
+      this.el.classList.toggle('unit--walking', walking);
     }
 
     applyLayout() {
@@ -239,7 +276,7 @@
         }
       } else if (this.stateEnum === States.walkRight) {
         this.walkIdleCounter += 1;
-        this.left += this.speed;
+        this.left += this.speed * styleSpeedMult();
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
@@ -247,15 +284,24 @@
           this.left = rightMax;
           complete = true;
         }
+        // Showdown stays close to the spawn — turn around once we've drifted enough.
+        if (spriteStyle === 'showdown' && this.left - this.home >= SHOWDOWN_MAX_DRIFT_PX) {
+          this.left = this.home + SHOWDOWN_MAX_DRIFT_PX;
+          complete = true;
+        }
         this.lastFacingLeft = false;
       } else if (this.stateEnum === States.walkLeft) {
         this.walkIdleCounter += 1;
-        this.left -= this.speed;
+        this.left -= this.speed * styleSpeedMult();
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
         if (this.left <= 0) {
           this.left = 0;
+          complete = true;
+        }
+        if (spriteStyle === 'showdown' && this.home - this.left >= SHOWDOWN_MAX_DRIFT_PX) {
+          this.left = this.home - SHOWDOWN_MAX_DRIFT_PX;
           complete = true;
         }
         this.lastFacingLeft = true;
@@ -315,10 +361,25 @@
   }
 
   window.PetEngine = {
-    start(laneEl) {
+    start(laneEl, opts) {
       lane = laneEl;
+      if (opts && typeof opts.spriteStyle === 'string') {
+        spriteStyle = opts.spriteStyle === 'showdown' ? 'showdown' : 'vscode';
+      }
       if (timer) clearInterval(timer);
       timer = setInterval(tickAll, TICK_MS);
+    },
+    setSpriteStyle(style) {
+      const next = style === 'showdown' ? 'showdown' : 'vscode';
+      if (next === spriteStyle) return;
+      spriteStyle = next;
+      document.body.classList.toggle('sprite-style-showdown', next === 'showdown');
+      for (const pet of pets.values()) {
+        // Re-anchor the showdown drift bounds to wherever the pet is now, so toggling
+        // mid-session doesn't yank a wandering pet back to its original spawn.
+        if (next === 'showdown') pet.home = pet.left;
+        pet.updateVisuals(true);
+      }
     },
     sync(agentsObj) {
       const ids = new Set(Object.keys(agentsObj || {}));
@@ -333,7 +394,8 @@
         if (pets.has(id)) {
           pets.get(id).setAgent(a);
         } else {
-          pets.set(id, new Pet(id, a, lane));
+          const occupied = [...pets.values()].map((p) => p.left);
+          pets.set(id, new Pet(id, a, lane, occupied));
         }
       }
       ensureEmpty(lane, ids.size > 0);
