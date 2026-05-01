@@ -22,11 +22,22 @@
     return Math.abs(h);
   }
 
+  let spriteStyle = 'vscode';
+
+  /** Showdown mode walks at ~55% the vscode pace — a stroll that suits the longer bob cadence. */
+  function styleSpeedMult() {
+    return spriteStyle === 'showdown' ? 0.55 : 1;
+  }
+
   function spritePath(agent, useWalk) {
     const gen = agent.gen || 1;
     const species = agent.species || 'pikachu';
     const base = `gen${gen}/${species}`;
     const shiny = Boolean(agent.shiny);
+    if (spriteStyle === 'showdown') {
+      // Showdown sprites are single continuously-animated gifs; no walk/idle distinction.
+      return shiny ? `${base}/showdown_shiny.gif` : `${base}/showdown_default.gif`;
+    }
     if (shiny) {
       return useWalk ? `${base}/shiny_walk_8fps.gif` : `${base}/shiny_idle_8fps.gif`;
     }
@@ -115,7 +126,9 @@
           <img class="bubble-img" alt="" width="${BUBBLE_PX}" height="28" />
         </div>
         <div class="sprite-wrap">
-          <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
+          <div class="sprite-bob">
+            <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
+          </div>
         </div>
       `;
       this.el.appendChild(this.inner);
@@ -212,6 +225,7 @@
       } else {
         this.spriteEl.style.transform = this.lastFacingLeft ? 'scaleX(-1)' : 'scaleX(1)';
       }
+      this.el.classList.toggle('unit--walking', walking);
     }
 
     applyLayout() {
@@ -239,7 +253,7 @@
         }
       } else if (this.stateEnum === States.walkRight) {
         this.walkIdleCounter += 1;
-        this.left += this.speed;
+        this.left += this.speed * styleSpeedMult();
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
@@ -250,7 +264,7 @@
         this.lastFacingLeft = false;
       } else if (this.stateEnum === States.walkLeft) {
         this.walkIdleCounter += 1;
-        this.left -= this.speed;
+        this.left -= this.speed * styleSpeedMult();
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
@@ -315,10 +329,20 @@
   }
 
   window.PetEngine = {
-    start(laneEl) {
+    start(laneEl, opts) {
       lane = laneEl;
+      if (opts && typeof opts.spriteStyle === 'string') {
+        spriteStyle = opts.spriteStyle === 'showdown' ? 'showdown' : 'vscode';
+      }
       if (timer) clearInterval(timer);
       timer = setInterval(tickAll, TICK_MS);
+    },
+    setSpriteStyle(style) {
+      const next = style === 'showdown' ? 'showdown' : 'vscode';
+      if (next === spriteStyle) return;
+      spriteStyle = next;
+      document.body.classList.toggle('sprite-style-showdown', next === 'showdown');
+      for (const pet of pets.values()) pet.updateVisuals(true);
     },
     sync(agentsObj) {
       const ids = new Set(Object.keys(agentsObj || {}));

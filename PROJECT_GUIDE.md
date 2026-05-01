@@ -61,7 +61,14 @@ The install is idempotent and tagged with a marker so it never duplicates or clo
 ## 🚀 Running the Project
 ```bash
 npm install
-npm run vendor-sprites # Downloads the Pokémon assets
+npm run vendor-sprites # Downloads the Pokémon assets (vscode-pokemon, gen1 8fps)
 npm start
 ```
 By default, the overlay is passthrough (you can't click it). Set `POKEMON_CLAUDE_MOUSE_PASSTHROUGH=0` in your env if you want to drag the Pokémon around! (The legacy name `POKEMON_INTACT_MOUSE_PASSTHROUGH` is still supported.)
+
+### 🎨 Sprite Style: vscode vs. showdown
+Two art styles ship side-by-side. Pick with `POKEMON_CLAUDE_SPRITE_STYLE`:
+- **`vscode`** *(default)* — small gen1 8fps pixel gifs from `vscode-pokemon`, with separate walk/idle animations. Vendored by `npm run vendor-sprites`.
+- **`showdown`** — larger XY-style HD animated sprites from Pokémon Showdown (single continuously-animated gif). Showdown ships idle-only anims, so `renderer/style.css` synthesizes a walk feel via a CSS `translateY` keyframe (`sprite-walk-bob`) toggled by the `unit--walking` class. The bob lives on a dedicated `.sprite-bob` wrapper so it doesn't fight the sprite's `scaleX(±1)` facing transform. Vendor with `npm run vendor-sprites:showdown` (defaults to 10 iconic species — pikachu/charizard/bulbasaur/squirtle/charmander/mewtwo/mew/snorlax/eevee/gengar) or `npm run vendor-sprites:showdown:all` for the full gen1 set. Custom subset: `bash scripts/vendor-pokemon-showdown.sh --species=name1,name2,...`. Requires `vendor-sprites` to have run first to provide the species directories.
+
+The chosen style is exposed to the renderer via `GET /api/meta` (`spriteStyle` field). `renderer/pet-engine.js` picks the file path inside `spritePath()`. `src/speciesRegistry.js` filters the species pool to only species with `showdown_default.gif` vendored when style is `showdown`, so a sparse vendor never produces broken images.

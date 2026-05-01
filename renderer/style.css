@@ -199,6 +199,31 @@ body.dock {
   flex-shrink: 0;
 }
 
+.sprite-bob {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Anchor the squash at the feet so it reads as "step", not "scale in place". */
+  transform-origin: 50% 100%;
+  will-change: transform;
+}
+
+/* Showdown gifs are idle-only, so synthesize a gentle walk feel by bobbing the sprite while moving.
+   Two-bounce cadence (one bob per "step") with very subtle squash/stretch anchored at the feet. */
+@keyframes sprite-walk-bob {
+  0%, 100% { transform: translateY(0)    scaleY(1);     }
+  25%      { transform: translateY(-2px) scaleY(1.015); }
+  50%      { transform: translateY(0)    scaleY(0.985); }
+  75%      { transform: translateY(-2px) scaleY(1.015); }
+}
+
+body.sprite-style-showdown .unit.unit--walking .sprite-bob {
+  animation: sprite-walk-bob 880ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
 .sprite {
   width: 72px;
   height: 72px;
