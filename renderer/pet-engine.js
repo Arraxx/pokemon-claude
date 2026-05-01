@@ -24,11 +24,6 @@
 
   let spriteStyle = 'vscode';
 
-  /** Showdown mode walks at ~55% the vscode pace — a stroll that suits the longer bob cadence. */
-  function styleSpeedMult() {
-    return spriteStyle === 'showdown' ? 0.55 : 1;
-  }
-
   function spritePath(agent, useWalk) {
     const gen = agent.gen || 1;
     const species = agent.species || 'pikachu';
@@ -79,7 +74,30 @@
     return false;
   }
 
+  /** Find a spawn `left` near the hash-preferred spot that doesn't overlap any occupied slot.
+   *  Pets need at least `width + MIN_GAP` between left-edges to avoid visual overlap.
+   *  Falls back to the hash-preferred position if the lane is too crowded to fit a free slot. */
+  function pickSpawnLeft(hashH, pad, rightMax, width, occupied) {
+    const MIN_GAP = 8;
+    const minDist = width + MIN_GAP;
+    const spread = Math.max(0, rightMax - pad);
+    const preferred = pad + (spread > 0 ? hashH % (spread + 1) : 0);
+    const clamp = (x) => Math.max(pad, Math.min(rightMax, x));
+    const overlaps = (x) => occupied.some((o) => Math.abs(o - x) < minDist);
+    if (!overlaps(preferred)) return preferred;
+    const STEP = Math.max(8, Math.floor(minDist / 4));
+    for (let offset = STEP; offset <= spread; offset += STEP) {
+      const right = clamp(preferred + offset);
+      if (right !== preferred && !overlaps(right)) return right;
+      const left = clamp(preferred - offset);
+      if (left !== preferred && !overlaps(left)) return left;
+    }
+    return preferred;
+  }
+
   function chooseNextState(from) {
+    // Showdown sprites are continuously-animated idle gifs — keep them stationary.
+    if (spriteStyle === 'showdown') return States.sitIdle;
     const table = {
       [States.sitIdle]: [States.walkLeft, States.walkRight],
       [States.walkLeft]: [States.sitIdle, States.walkRight],
@@ -91,7 +109,7 @@
   }
 
   class Pet {
-    constructor(id, agent, laneEl) {
+    constructor(id, agent, laneEl, occupiedLefts) {
       this.id = id;
       this.agent = agent;
       this.laneEl = laneEl;
@@ -101,8 +119,7 @@
       const laneW = Math.max(laneEl.clientWidth || 400, 200);
       const rightMax = Math.max(0, Math.floor(laneW * 0.95) - this.width);
       const pad = 8;
-      const spread = Math.max(0, rightMax - pad);
-      this.left = pad + (spread > 0 ? h % (spread + 1) : 0);
+      this.left = pickSpawnLeft(h, pad, rightMax, this.width, occupiedLefts || []);
       const baseSpeed = 2 + (h % 25) / 10;
       this.speed = baseSpeed * (0.85 + ((h >> 4) % 30) / 100);
 
@@ -126,9 +143,7 @@
           <img class="bubble-img" alt="" width="${BUBBLE_PX}" height="28" />
         </div>
         <div class="sprite-wrap">
-          <div class="sprite-bob">
-            <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
-          </div>
+          <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
         </div>
       `;
       this.el.appendChild(this.inner);
@@ -253,7 +268,7 @@
         }
       } else if (this.stateEnum === States.walkRight) {
         this.walkIdleCounter += 1;
-        this.left += this.speed * styleSpeedMult();
+        this.left += this.speed;
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
@@ -264,7 +279,7 @@
         this.lastFacingLeft = false;
       } else if (this.stateEnum === States.walkLeft) {
         this.walkIdleCounter += 1;
-        this.left -= this.speed * styleSpeedMult();
+        this.left -= this.speed;
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
@@ -342,7 +357,15 @@
       if (next === spriteStyle) return;
       spriteStyle = next;
       document.body.classList.toggle('sprite-style-showdown', next === 'showdown');
-      for (const pet of pets.values()) pet.updateVisuals(true);
+      for (const pet of pets.values()) {
+        // Showdown is stationary — freeze any in-flight walkers so they don't keep drifting.
+        if (next === 'showdown' && pet.stateEnum !== States.sitIdle) {
+          pet.stateEnum = States.sitIdle;
+          pet.idleCounter = 0;
+          pet.walkIdleCounter = 0;
+        }
+        pet.updateVisuals(true);
+      }
     },
     sync(agentsObj) {
       const ids = new Set(Object.keys(agentsObj || {}));
@@ -357,7 +380,8 @@
         if (pets.has(id)) {
           pets.get(id).setAgent(a);
         } else {
-          pets.set(id, new Pet(id, a, lane));
+          const occupied = [...pets.values()].map((p) => p.left);
+          pets.set(id, new Pet(id, a, lane, occupied));
         }
       }
       ensureEmpty(lane, ids.size > 0);
