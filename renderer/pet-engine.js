@@ -24,6 +24,13 @@
 
   let spriteStyle = 'vscode';
 
+  /** Showdown pets walk at ~55% the vscode pace and only drift this far from their spawn,
+   *  so they keep a "stationed" feel — a stroll, not a sweep across the lane. */
+  const SHOWDOWN_MAX_DRIFT_PX = 20;
+  function styleSpeedMult() {
+    return spriteStyle === 'showdown' ? 0.55 : 1;
+  }
+
   function spritePath(agent, useWalk) {
     const gen = agent.gen || 1;
     const species = agent.species || 'pikachu';
@@ -96,8 +103,6 @@
   }
 
   function chooseNextState(from) {
-    // Showdown sprites are continuously-animated idle gifs — keep them stationary.
-    if (spriteStyle === 'showdown') return States.sitIdle;
     const table = {
       [States.sitIdle]: [States.walkLeft, States.walkRight],
       [States.walkLeft]: [States.sitIdle, States.walkRight],
@@ -120,6 +125,7 @@
       const rightMax = Math.max(0, Math.floor(laneW * 0.95) - this.width);
       const pad = 8;
       this.left = pickSpawnLeft(h, pad, rightMax, this.width, occupiedLefts || []);
+      this.home = this.left;
       const baseSpeed = 2 + (h % 25) / 10;
       this.speed = baseSpeed * (0.85 + ((h >> 4) % 30) / 100);
 
@@ -143,7 +149,9 @@
           <img class="bubble-img" alt="" width="${BUBBLE_PX}" height="28" />
         </div>
         <div class="sprite-wrap">
-          <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
+          <div class="sprite-bob">
+            <img class="sprite" alt="" width="${SPRITE_PX}" height="${SPRITE_PX}" loading="lazy" />
+          </div>
         </div>
       `;
       this.el.appendChild(this.inner);
@@ -268,7 +276,7 @@
         }
       } else if (this.stateEnum === States.walkRight) {
         this.walkIdleCounter += 1;
-        this.left += this.speed;
+        this.left += this.speed * styleSpeedMult();
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
@@ -276,15 +284,24 @@
           this.left = rightMax;
           complete = true;
         }
+        // Showdown stays close to the spawn — turn around once we've drifted enough.
+        if (spriteStyle === 'showdown' && this.left - this.home >= SHOWDOWN_MAX_DRIFT_PX) {
+          this.left = this.home + SHOWDOWN_MAX_DRIFT_PX;
+          complete = true;
+        }
         this.lastFacingLeft = false;
       } else if (this.stateEnum === States.walkLeft) {
         this.walkIdleCounter += 1;
-        this.left -= this.speed;
+        this.left -= this.speed * styleSpeedMult();
         if (this.walkIdleCounter > this.holdTimeWalkStuck && Math.random() < 0.01) {
           complete = true;
         }
         if (this.left <= 0) {
           this.left = 0;
+          complete = true;
+        }
+        if (spriteStyle === 'showdown' && this.home - this.left >= SHOWDOWN_MAX_DRIFT_PX) {
+          this.left = this.home - SHOWDOWN_MAX_DRIFT_PX;
           complete = true;
         }
         this.lastFacingLeft = true;
@@ -358,12 +375,9 @@
       spriteStyle = next;
       document.body.classList.toggle('sprite-style-showdown', next === 'showdown');
       for (const pet of pets.values()) {
-        // Showdown is stationary — freeze any in-flight walkers so they don't keep drifting.
-        if (next === 'showdown' && pet.stateEnum !== States.sitIdle) {
-          pet.stateEnum = States.sitIdle;
-          pet.idleCounter = 0;
-          pet.walkIdleCounter = 0;
-        }
+        // Re-anchor the showdown drift bounds to wherever the pet is now, so toggling
+        // mid-session doesn't yank a wandering pet back to its original spawn.
+        if (next === 'showdown') pet.home = pet.left;
         pet.updateVisuals(true);
       }
     },

@@ -101,7 +101,7 @@ npm run pack
 | `POKEMON_CLAUDE_DOCK_LIFT` | Extra height when the window is focused (default `36`) |
 | `POKEMON_CLAUDE_MOUSE_PASSTHROUGH` | `0` to allow dragging the window (default: passthrough on) |
 | `POKEMON_CLAUDE_MAC_LEVEL` | macOS only: `alwaysOnTop` level (e.g. `status`) |
-| `POKEMON_CLAUDE_SPRITE_STYLE` | Art style — `vscode` (default, gen1 8fps pixel, walks left/right) or `showdown` (Pokémon Showdown HD animated, stationary — the gif's own animation carries the motion). Run `npm run vendor-sprites:showdown` once first (or `:showdown:all` for the full set). The species pool is restricted to whichever pokémon you've vendored. |
+| `POKEMON_CLAUDE_SPRITE_STYLE` | Art style — `vscode` (default, gen1 8fps pixel, walks the lane) or `showdown` (Pokémon Showdown HD animated, drifts only ~20px from spawn with a faint walk-bob). Run `npm run vendor-sprites:showdown` once first (or `:showdown:all` for the full set). The species pool is restricted to whichever pokémon you've vendored. |
 
 > **About the hook bridge.** On startup the app installs a small script at `~/.claude/pokemon-claude-hook.sh` and adds tagged entries (`"pokemon-claude-bridge": true`) under `hooks` in `~/.claude/settings.json`. Existing hooks are preserved, the original file is backed up to `settings.json.pokemon-claude.bak`, and re-running the app never duplicates the entries. This is what lets the heart bubble appear instantly on prompts like *"Do you want to allow Claude to fetch this content?"* — those prompts only land in the JSONL transcript after you answer, so polling alone can't see them.
 
