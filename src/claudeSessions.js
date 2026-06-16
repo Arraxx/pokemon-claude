@@ -5,6 +5,7 @@ const { syncClaudeAgents } = require('./agentStore');
 const {
   inferNeedsPermissionFromTranscript,
   getLastFinalAssistantFingerprint,
+  transcriptMtimeMs,
 } = require('./claudeTranscript');
 const hookState = require('./hookState');
 
@@ -27,6 +28,10 @@ const lastFinalFP = new Map();
  */
 const taskFlash = new Map();
 const TASK_FLASH_MS = 10000;
+
+/** Sessions with no transcript activity for this long are dropped (pokemon
+ * hidden) until they become active again. */
+const IDLE_DROP_MS = 60 * 60 * 1000;
 
 function isPidAlive(pid) {
   try {
@@ -66,6 +71,13 @@ function scanSessions() {
     if (!isPidAlive(pid)) continue;
 
     const cwd = typeof data.cwd === 'string' ? data.cwd : '';
+
+    // Drop the pokemon for sessions idle (no transcript writes) > 1h. The row
+    // reappears automatically on the next tick once activity resumes, since
+    // species is hash-stable on sessionId.
+    const lastActivity = transcriptMtimeMs(cwd, sessionId);
+    if (lastActivity > 0 && Date.now() - lastActivity > IDLE_DROP_MS) continue;
+
     const name = typeof data.name === 'string' && data.name.trim() ? data.name.trim() : '';
     const label = name || (cwd ? path.basename(cwd) : sessionId.slice(0, 8));
 

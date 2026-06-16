@@ -219,8 +219,26 @@ function getLastFinalAssistantFingerprint(cwd, sessionId) {
   return null;
 }
 
+/**
+ * Last-activity timestamp (ms) for a session: the mtime of its transcript
+ * JSONL, which Claude Code appends to on every prompt, tool use, and reply.
+ * Returns 0 when the transcript can't be found.
+ */
+function transcriptMtimeMs(cwd, sessionId) {
+  if (!cwd || !sessionId) return 0;
+  const slug = cwdToProjectSlug(cwd);
+  if (!slug) return 0;
+  const jsonl = path.join(PROJECTS_ROOT, slug, `${sessionId}.jsonl`);
+  try {
+    return fs.statSync(jsonl).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 module.exports = {
   inferNeedsPermissionFromTranscript,
+  transcriptMtimeMs,
   inferNeedsPermissionFromTranscriptPath,
   getLastFinalAssistantFingerprint,
   textLooksLikeQuestion,
