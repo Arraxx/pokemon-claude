@@ -5,9 +5,18 @@ const ASSETS_ROOT = path.join(__dirname, '..', 'assets', 'pokemon-media');
 
 /** @type {{ gen: number, species: string }[] | null} */
 let poolCache = null;
+let activeStyle = 'vscode';
 
 /** agent id -> { gen, species } */
 const idToSpecies = new Map();
+
+/** Restrict the species pool when in `showdown` mode to only those with showdown gifs vendored. */
+function setStyle(style) {
+  const next = style === 'showdown' ? 'showdown' : 'vscode';
+  if (next === activeStyle) return;
+  activeStyle = next;
+  poolCache = null;
+}
 
 function hashString(s) {
   let h = 0;
@@ -34,9 +43,13 @@ function loadPool() {
       if (!/^[a-z0-9_]+$/i.test(name)) continue;
       const full = path.join(dir, name);
       try {
-        if (fs.statSync(full).isDirectory()) {
-          out.push({ gen: g, species: name.toLowerCase() });
+        if (!fs.statSync(full).isDirectory()) continue;
+        if (activeStyle === 'showdown') {
+          // Only include species that have showdown sprites vendored — otherwise the
+          // renderer would assign a species that 404s on the showdown gif path.
+          if (!fs.existsSync(path.join(full, 'showdown_default.gif'))) continue;
         }
+        out.push({ gen: g, species: name.toLowerCase() });
       } catch {
         /* skip */
       }
@@ -124,4 +137,5 @@ function forgetAgent(id) {
 module.exports = {
   reconcileSpecies,
   forgetAgent,
+  setStyle,
 };

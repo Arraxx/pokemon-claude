@@ -11,6 +11,16 @@ const lane = document.getElementById('root');
 if (lane && window.PetEngine) {
   window.PetEngine.start(lane);
 }
+
+fetch('/api/meta')
+  .then((r) => r.json())
+  .then((meta) => {
+    if (meta && meta.spriteStyle && window.PetEngine) {
+      window.PetEngine.setSpriteStyle(meta.spriteStyle);
+    }
+  })
+  .catch(() => { });
+
 refresh();
 
 const es = new EventSource('/api/stream');

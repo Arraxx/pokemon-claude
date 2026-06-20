@@ -8,6 +8,7 @@ const { sseClients, getState, upsertFromEvent, removeById } = require('./agentSt
 const { startClaudePolling, forceTick: forceClaudeTick } = require('./claudeSessions');
 const hookState = require('./hookState');
 const { installHooks } = require('./claudeHooks');
+const { setStyle: setSpeciesStyle } = require('./speciesRegistry');
 
 /** Project root (parent of src/). */
 const ROOT = path.join(__dirname, '..');
@@ -34,6 +35,23 @@ const MOUSE_PASSTHROUGH = env('POKEMON_CLAUDE_MOUSE_PASSTHROUGH', 'POKEMON_INTAC
 const CLAUDE_SESSION_SYNC = env('POKEMON_CLAUDE_SYNC', 'POKEMON_INTACT_CLAUDE') !== '0';
 /** Auto-install Claude Code hook bridge into `~/.claude/settings.json` (set to `0` to disable). */
 const INSTALL_HOOKS = env('POKEMON_CLAUDE_INSTALL_HOOKS') !== '0';
+/** Sprite art source: `vscode` (default — vscode-pokemon 8fps gen1) or `showdown` (Pokémon Showdown HD animated). */
+const SPRITE_STYLE = (() => {
+  const raw = (env('POKEMON_CLAUDE_SPRITE_STYLE') || 'vscode').toLowerCase();
+  if (raw !== 'showdown') return 'vscode';
+  // Downgrade silently when the showdown vendor script hasn't been run, since otherwise
+  // the renderer would just show 151 broken images. Probe pikachu as a sentinel.
+  const sentinel = path.join(ASSETS_ROOT, 'gen1', 'pikachu', 'showdown_default.gif');
+  if (!fs.existsSync(sentinel)) {
+    console.warn(
+      '[pokemon-claude] POKEMON_CLAUDE_SPRITE_STYLE=showdown set, but showdown sprites not vendored. ' +
+        'Falling back to vscode. Run: npm run vendor-sprites:showdown',
+    );
+    return 'vscode';
+  }
+  return 'showdown';
+})();
+setSpeciesStyle(SPRITE_STYLE);
 
 function json(res, status, obj) {
   const body = JSON.stringify(obj);
@@ -117,6 +135,7 @@ function createServer() {
         host: HOST,
         claudeSync: CLAUDE_SESSION_SYNC,
         mousePassthrough: MOUSE_PASSTHROUGH,
+        spriteStyle: SPRITE_STYLE,
       });
       return;
     }
